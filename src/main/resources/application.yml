@@ -1,0 +1,65 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: data-analysis-agent
+  datasource:
+    url: jdbc:h2:file:./data/agentdb;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  ai:
+    openai:
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      api-key: ${AI_API_KEY:your-api-key}
+      chat:
+        options:
+          model: ${AI_MODEL:deepseek-chat}
+          temperature: 0.3
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change_this_in_production_with_at_least_256_bits_key_1234567890}
+    expiration: 86400000
+  duckdb:
+    storage-path: ./data/duckdb
+  upload:
+    max-file-size: 52428800
+    storage-path: ./data/uploads
+  ai:
+    providers:
+      deepseek:
+        base-url: https://api.deepseek.com
+        models:
+          - deepseek-chat
+          - deepseek-reasoner
+      kimi:
+        base-url: https://api.moonshot.cn/v1
+        models:
+          - moonshot-v1-8k
+          - moonshot-v1-32k
+      minimax:
+        base-url: https://api.minimax.chat/v1
+        models:
+          - abab6.5s-chat
+          - abab6.5t-chat
+
+logging:
+  level:
+    com.example.agent: DEBUG
+    org.springframework.ai: DEBUG

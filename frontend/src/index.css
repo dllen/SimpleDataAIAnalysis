@@ -1,0 +1,79 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #f0f2f5;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.chat-input {
+  border-top: 1px solid #f0f0f0;
+  padding: 16px;
+  background: #fff;
+}
+
+.message-item {
+  margin-bottom: 16px;
+}
+
+.message-user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.message-user .message-content {
+  background: #1677ff;
+  color: #fff;
+  border-radius: 8px 8px 0 8px;
+  padding: 10px 14px;
+  max-width: 70%;
+}
+
+.message-ai {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.message-ai .message-content {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px 8px 8px 0;
+  padding: 10px 14px;
+  max-width: 80%;
+}
+
+.sql-block {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 8px 0;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  overflow-x: auto;
+}
+
+.data-table-wrapper {
+  margin: 8px 0;
+  overflow-x: auto;
+}
