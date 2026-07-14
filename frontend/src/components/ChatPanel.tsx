@@ -1,16 +1,19 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Input, Button, Spin, Tooltip } from 'antd'
 import { SendOutlined, CopyOutlined } from '@ant-design/icons'
-import { ChatMessage } from '../types'
+import { ChatMessage, CleaningExecutionRequest } from '../types'
 import SqlBlock from './SqlBlock'
+import { CleaningCard } from './CleaningCard'
 
 interface Props {
   messages: ChatMessage[]
   onSend: (question: string) => void
   loading: boolean
+  onExecuteCleaning?: (request: CleaningExecutionRequest) => void
+  onSaveAsCleaning?: (request: CleaningExecutionRequest) => void
 }
 
-const ChatPanel: React.FC<Props> = ({ messages, onSend, loading }) => {
+const ChatPanel: React.FC<Props> = ({ messages, onSend, loading, onExecuteCleaning, onSaveAsCleaning }) => {
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -65,6 +68,13 @@ const ChatPanel: React.FC<Props> = ({ messages, onSend, loading }) => {
           <div key={msg.id} className={`message-item message-${msg.role}`}>
             {msg.role === 'user' ? (
               <div className="message-content">{msg.content}</div>
+            ) : msg.proposal ? (
+              <CleaningCard
+                proposal={msg.proposal}
+                onExecute={onExecuteCleaning || (() => {})}
+                onSaveAs={onSaveAsCleaning || (() => {})}
+                loading={loading}
+              />
             ) : (
               <div className="message-content">
                 {msg.sql && <SqlBlock sql={msg.sql} />}
