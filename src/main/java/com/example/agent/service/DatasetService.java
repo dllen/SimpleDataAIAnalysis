@@ -1,8 +1,10 @@
 package com.example.agent.service;
 
+import com.example.agent.model.dto.CleaningProposal;
 import com.example.agent.model.dto.ColumnInfo;
 import com.example.agent.model.dto.DatasetResponse;
 import com.example.agent.model.entity.Dataset;
+import com.example.agent.model.enums.DatasetStatus;
 import com.example.agent.model.enums.FileType;
 import com.example.agent.exception.BusinessException;
 import com.example.agent.repository.DatasetRepository;
@@ -31,6 +33,7 @@ public class DatasetService {
     private final DuckDbService duckDbService;
     private final DatasetRepository datasetRepository;
     private final com.example.agent.repository.UserRepository userRepository;
+    private final DataCleaningService dataCleaningService;
 
     @Value("${app.upload.storage-path}")
     private String uploadPath;
@@ -39,10 +42,12 @@ public class DatasetService {
     private long maxFileSize;
 
     public DatasetService(DuckDbService duckDbService, DatasetRepository datasetRepository,
-                          com.example.agent.repository.UserRepository userRepository) {
+                          com.example.agent.repository.UserRepository userRepository,
+                          DataCleaningService dataCleaningService) {
         this.duckDbService = duckDbService;
         this.datasetRepository = datasetRepository;
         this.userRepository = userRepository;
+        this.dataCleaningService = dataCleaningService;
     }
 
     @Transactional
@@ -50,7 +55,8 @@ public class DatasetService {
         validateFile(file);
 
         FileType fileType = FileType.fromFilename(file.getOriginalFilename());
-        String tableName = generateTableName(userId);
+        String finalTableName = generateTableName(userId);
+        String rawTableName = "_raw_" + finalTableName;
 
         try {
             Path userDir = Paths.get(uploadPath, "user_" + userId);
@@ -60,22 +66,32 @@ public class DatasetService {
             Path filePath = userDir.resolve(storedFileName);
             file.transferTo(filePath);
 
-            DuckDbService.DatasetMeta meta = switch (fileType) {
-                case CSV -> duckDbService.loadCsv(userId, filePath.toString(), tableName);
-                case JSON -> duckDbService.loadJson(userId, filePath.toString(), tableName);
-                case EXCEL -> loadExcelToDuckDb(userId, file, filePath, tableName);
+            DuckDbService.DatasetMeta rawMeta = switch (fileType) {
+                case CSV -> duckDbService.loadCsv(userId, filePath.toString(), rawTableName);
+                case JSON -> duckDbService.loadJson(userId, filePath.toString(), rawTableName);
+                case EXCEL -> loadExcelToDuckDb(userId, file, filePath, rawTableName);
             };
+
+            DatasetStatus status = DatasetStatus.READY;
+            CleaningProposal proposal = dataCleaningService.analyze(userId, null, rawTableName);
+            if (!proposal.issues().isEmpty()) {
+                status = DatasetStatus.PENDING_CLEAN;
+            } else {
+                duckDbService.cloneTable(userId, rawTableName, finalTableName);
+            }
 
             Dataset dataset = new Dataset();
             dataset.setUserId(userId);
             dataset.setFileName(file.getOriginalFilename());
             dataset.setFileType(fileType.getExtension());
-            dataset.setTableName(tableName);
-            dataset.setColumnInfo(serializeColumns(meta.columns()));
-            dataset.setRowCount(meta.rowCount());
+            dataset.setTableName(status == DatasetStatus.READY ? finalTableName : rawTableName);
+            dataset.setRawTableName(rawTableName);
+            dataset.setColumnInfo(serializeColumns(rawMeta.columns()));
+            dataset.setRowCount(rawMeta.rowCount());
+            dataset.setStatus(status);
             dataset = datasetRepository.save(dataset);
 
-            return toResponse(dataset, meta.columns());
+            return toResponse(dataset, rawMeta.columns());
 
         } catch (BusinessException e) {
             throw e;
