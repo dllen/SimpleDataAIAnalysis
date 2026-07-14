@@ -17,7 +17,7 @@ public class DuckDbService {
     private static final Logger log = LoggerFactory.getLogger(DuckDbService.class);
     private static final int MAX_RESULT_ROWS = 10000;
     private static final Set<String> ALLOWED_CLEANING_KEYWORDS = Set.of(
-        "CREATE TABLE AS SELECT", "INSERT INTO", "UPDATE", "DELETE", "ALTER", "DROP TABLE IF EXISTS"
+        "CREATE TABLE AS SELECT", "INSERT INTO SELECT", "UPDATE", "DELETE", "ALTER", "DROP TABLE IF EXISTS"
     );
 
     private final DuckDbConnectionPool connectionPool;
