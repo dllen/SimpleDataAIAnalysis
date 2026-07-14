@@ -9,12 +9,16 @@ import org.springframework.stereotype.Service;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class DuckDbService {
 
     private static final Logger log = LoggerFactory.getLogger(DuckDbService.class);
     private static final int MAX_RESULT_ROWS = 10000;
+    private static final Set<String> ALLOWED_CLEANING_KEYWORDS = Set.of(
+        "CREATE TABLE AS SELECT", "INSERT INTO", "UPDATE", "DELETE", "ALTER", "DROP TABLE IF EXISTS"
+    );
 
     private final DuckDbConnectionPool connectionPool;
 
@@ -146,6 +150,61 @@ public class DuckDbService {
                 }
             }
             return tables;
+        });
+    }
+
+    public long executeCleaningSql(Long userId, String sql) throws SQLException {
+        String normalized = sql.trim().toUpperCase().replaceAll("\\s+", " ");
+        boolean allowed = ALLOWED_CLEANING_KEYWORDS.stream().anyMatch(kw -> {
+            if (kw.equals("CREATE TABLE AS SELECT")) {
+                return normalized.startsWith("CREATE TABLE") && normalized.contains("AS SELECT");
+            }
+            return normalized.startsWith(kw);
+        });
+        if (!allowed) {
+            throw new SQLException("不允许执行的 SQL 类型: " + sql);
+        }
+        return connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                return (long) stmt.executeUpdate(sql);
+            }
+        });
+    }
+
+    public void cloneTable(Long userId, String sourceTable, String targetTable) throws SQLException {
+        connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE " + targetTable + " AS SELECT * FROM " + sourceTable);
+            }
+        });
+    }
+
+    public void renameTable(Long userId, String oldName, String newName) throws SQLException {
+        connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("ALTER TABLE " + oldName + " RENAME TO " + newName);
+            }
+        });
+    }
+
+    public void dropTableIfExists(Long userId, String tableName) throws SQLException {
+        connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP TABLE IF EXISTS " + tableName);
+            }
+        });
+    }
+
+    public boolean tableExists(Long userId, String tableName) throws SQLException {
+        return connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(
+                     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'")) {
+                while (rs.next()) {
+                    if (rs.getString("table_name").equalsIgnoreCase(tableName)) return true;
+                }
+            }
+            return false;
         });
     }
 }
