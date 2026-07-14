@@ -61,7 +61,7 @@ public class DuckDbService {
         return new DatasetMeta(tableName, fileType, rowCount, columns);
     }
 
-    private long getRowCount(Long userId, String tableName) throws SQLException {
+    public long getRowCount(Long userId, String tableName) throws SQLException {
         return connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + tableName)) {

@@ -26,13 +26,19 @@ public class DataQualityScanner {
             String name = col.name();
             long nullCount = countNull(userId, tableName, name);
             if (nullCount > 0) {
+                String fixSql;
+                if (looksLikeNumeric(col.type())) {
+                    fixSql = "UPDATE " + tableName + " SET \"" + name + "\" = 0 WHERE \"" + name + "\" IS NULL";
+                } else {
+                    fixSql = "UPDATE " + tableName + " SET \"" + name + "\" = '' WHERE \"" + name + "\" IS NULL";
+                }
                 issues.add(new CleaningIssue(
                     "MISSING_VALUE",
                     name,
                     nullCount,
                     "列 " + name + " 存在 " + nullCount + " 个缺失值（共 " + totalRows + " 行）",
                     "将缺失值填充为 0（数值）或空字符串（文本）",
-                    "UPDATE " + tableName + " SET \"" + name + "\" = CASE WHEN TRY_CAST(\"" + name + "\" AS DOUBLE) IS NOT NULL THEN '0' ELSE '' END WHERE \"" + name + "\" IS NULL"
+                    fixSql
                 ));
             }
 
