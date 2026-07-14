@@ -25,27 +25,30 @@ public class DuckDbService {
     public record DatasetMeta(String tableName, String fileType, long rowCount, List<ColumnInfo> columns) {}
 
     public DatasetMeta loadCsv(Long userId, String filePath, String tableName) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE TABLE " + tableName + " AS FROM read_csv('" + filePath + "', auto_detect=true)");
+        return connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE " + tableName + " AS FROM read_csv('" + filePath + "', auto_detect=true)");
+            }
             return loadDatasetMeta(userId, tableName, "csv");
-        }
+        });
     }
 
     public DatasetMeta loadJson(Long userId, String filePath, String tableName) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE TABLE " + tableName + " AS FROM read_json_auto('" + filePath + "')");
+        return connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE " + tableName + " AS FROM read_json_auto('" + filePath + "')");
+            }
             return loadDatasetMeta(userId, tableName, "json");
-        }
+        });
     }
 
     public DatasetMeta loadFromSql(Long userId, String sql, String tableName, String fileType) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE TABLE " + tableName + " AS " + sql);
+        return connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE " + tableName + " AS " + sql);
+            }
             return loadDatasetMeta(userId, tableName, fileType);
-        }
+        });
     }
 
     private DatasetMeta loadDatasetMeta(Long userId, String tableName, String fileType) throws SQLException {
@@ -55,29 +58,30 @@ public class DuckDbService {
     }
 
     private long getRowCount(Long userId, String tableName) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
-            if (rs.next()) {
-                return rs.getLong(1);
+        return connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
+                if (rs.next()) {
+                    return rs.getLong(1);
+                }
             }
-        }
-        return 0;
+            return 0L;
+        });
     }
 
     public List<ColumnInfo> getSchema(Long userId, String tableName) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        List<ColumnInfo> columns = new ArrayList<>();
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("DESCRIBE " + tableName)) {
-            ResultSetMetaData meta = rs.getMetaData();
-            while (rs.next()) {
-                String name = rs.getString("column_name");
-                String type = rs.getString("column_type");
-                columns.add(new ColumnInfo(name, type, true));
+        return connectionPool.withConnection(userId, conn -> {
+            List<ColumnInfo> columns = new ArrayList<>();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("DESCRIBE " + tableName)) {
+                while (rs.next()) {
+                    String name = rs.getString("column_name");
+                    String type = rs.getString("column_type");
+                    columns.add(new ColumnInfo(name, type, true));
+                }
             }
-        }
-        return columns;
+            return columns;
+        });
     }
 
     public QueryResult executeReadOnlyQuery(Long userId, String sql) throws SQLException {
@@ -92,31 +96,32 @@ public class DuckDbService {
             throw new SQLException("不允许执行多条语句");
         }
 
-        Connection conn = connectionPool.getConnection(userId);
-        long start = System.currentTimeMillis();
-        try (Statement stmt = conn.createStatement()) {
-            stmt.setMaxRows(MAX_RESULT_ROWS);
-            ResultSet rs = stmt.executeQuery(sql);
-            ResultSetMetaData meta = rs.getMetaData();
-            int columnCount = meta.getColumnCount();
+        return connectionPool.withConnection(userId, conn -> {
+            long start = System.currentTimeMillis();
+            try (Statement stmt = conn.createStatement()) {
+                stmt.setMaxRows(MAX_RESULT_ROWS);
+                ResultSet rs = stmt.executeQuery(sql);
+                ResultSetMetaData meta = rs.getMetaData();
+                int columnCount = meta.getColumnCount();
 
-            List<String> columns = new ArrayList<>();
-            for (int i = 1; i <= columnCount; i++) {
-                columns.add(meta.getColumnLabel(i));
-            }
-
-            List<List<Object>> rows = new ArrayList<>();
-            while (rs.next()) {
-                List<Object> row = new ArrayList<>();
+                List<String> columns = new ArrayList<>();
                 for (int i = 1; i <= columnCount; i++) {
-                    row.add(rs.getObject(i));
+                    columns.add(meta.getColumnLabel(i));
                 }
-                rows.add(row);
-            }
 
-            long executionTime = System.currentTimeMillis() - start;
-            return new QueryResult(columns, rows, rows.size(), executionTime);
-        }
+                List<List<Object>> rows = new ArrayList<>();
+                while (rs.next()) {
+                    List<Object> row = new ArrayList<>();
+                    for (int i = 1; i <= columnCount; i++) {
+                        row.add(rs.getObject(i));
+                    }
+                    rows.add(row);
+                }
+
+                long executionTime = System.currentTimeMillis() - start;
+                return new QueryResult(columns, rows, rows.size(), executionTime);
+            }
+        });
     }
 
     public QueryResult previewData(Long userId, String tableName) throws SQLException {
@@ -124,21 +129,23 @@ public class DuckDbService {
     }
 
     public void dropTable(Long userId, String tableName) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("DROP TABLE IF EXISTS " + tableName);
-        }
+        connectionPool.withConnection(userId, conn -> {
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP TABLE IF EXISTS " + tableName);
+            }
+        });
     }
 
     public List<String> listTables(Long userId) throws SQLException {
-        Connection conn = connectionPool.getConnection(userId);
-        List<String> tables = new ArrayList<>();
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SHOW TABLES")) {
-            while (rs.next()) {
-                tables.add(rs.getString(1));
+        return connectionPool.withConnection(userId, conn -> {
+            List<String> tables = new ArrayList<>();
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SHOW TABLES")) {
+                while (rs.next()) {
+                    tables.add(rs.getString(1));
+                }
             }
-        }
-        return tables;
+            return tables;
+        });
     }
 }
