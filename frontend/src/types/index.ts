@@ -9,6 +9,13 @@ export interface AuthResponse {
   userId: number
 }
 
+export enum DatasetStatus {
+  READY = 'READY',
+  PENDING_CLEAN = 'PENDING_CLEAN',
+  CLEANED = 'CLEANED',
+  FAILED = 'FAILED',
+}
+
 export interface ColumnInfo {
   name: string
   type: string
@@ -22,6 +29,40 @@ export interface DatasetResponse {
   tableName: string
   columns: ColumnInfo[]
   rowCount: number
+  createdAt: string
+  status: DatasetStatus
+}
+
+export interface CleaningIssue {
+  type: string
+  column: string
+  affectedRows: number
+  description: string
+  suggestion: string
+  defaultSql: string
+}
+
+export interface CleaningProposal {
+  datasetId: number
+  tableName: string
+  totalRows: number
+  issues: CleaningIssue[]
+  summary: string
+}
+
+export interface CleaningExecutionRequest {
+  selectedIssueIndexes: number[]
+  customSqls?: string[]
+  saveAsNewDataset: boolean
+  newDatasetName?: string
+}
+
+export interface CleaningHistoryRecord {
+  id: number
+  datasetId: number
+  status: string
+  affectedRows: number
+  errorMessage?: string
   createdAt: string
 }
 
