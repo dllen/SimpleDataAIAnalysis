@@ -7,6 +7,8 @@ import com.example.agent.model.enums.DatasetStatus;
 import com.example.agent.repository.CleaningHistoryRepository;
 import com.example.agent.repository.DatasetRepository;
 import com.example.agent.exception.BusinessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,8 @@ import java.util.List;
 
 @Service
 public class DataCleaningService {
+
+    private static final Logger log = LoggerFactory.getLogger(DataCleaningService.class);
 
     private final DataQualityScanner scanner;
     private final DuckDbService duckDbService;
@@ -49,7 +53,7 @@ public class DataCleaningService {
         CleaningHistory history = new CleaningHistory();
         history.setDatasetId(datasetId);
         history.setUserId(userId);
-        history.setStatus("EXECUTING");
+        history.setStatus(DatasetStatus.PENDING_CLEAN);
         history = historyRepository.save(history);
 
         String backupTable = "_backup_" + tableName;
@@ -76,7 +80,7 @@ public class DataCleaningService {
 
             history.setExecutedSql(executedSql.toString());
             history.setAffectedRows(affectedRows);
-            history.setStatus("SUCCESS");
+            history.setStatus(DatasetStatus.CLEANED);
             historyRepository.save(history);
 
             Dataset dataset = datasetRepository.findById(datasetId)
@@ -89,7 +93,7 @@ public class DataCleaningService {
             return toRecord(history);
 
         } catch (Exception e) {
-            history.setStatus("FAILED");
+            history.setStatus(DatasetStatus.FAILED);
             history.setErrorMessage(e.getMessage());
             historyRepository.save(history);
             try {
@@ -98,6 +102,7 @@ public class DataCleaningService {
                     duckDbService.renameTable(userId, backupTable, tableName);
                 }
             } catch (SQLException ex) {
+                log.warn("Rollback failed during cleaning execution: {}", ex.getMessage());
             }
             throw new BusinessException("清洗执行失败: " + e.getMessage());
         }
@@ -107,7 +112,7 @@ public class DataCleaningService {
     public Dataset saveAs(Long userId, Long datasetId, String tableName,
                           CleaningExecutionRequest request) throws SQLException {
         CleaningHistoryRecord record = execute(userId, datasetId, tableName, request);
-        if (!"SUCCESS".equals(record.status())) {
+        if (record.status() != DatasetStatus.CLEANED) {
             throw new BusinessException("清洗失败，无法另存");
         }
 

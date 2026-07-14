@@ -4,6 +4,7 @@ import com.example.agent.model.dto.CleaningExecutionRequest;
 import com.example.agent.model.dto.CleaningHistoryRecord;
 import com.example.agent.model.dto.CleaningProposal;
 import com.example.agent.model.entity.Dataset;
+import com.example.agent.model.enums.DatasetStatus;
 import com.example.agent.repository.DatasetRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,6 +67,6 @@ public class DataCleaningServiceTest {
             List.of(missingIdx), null, false, null
         );
         CleaningHistoryRecord record = cleaningService.execute(1L, ds.getId(), "clean_test", request);
-        assertEquals("SUCCESS", record.status());
+        assertEquals(DatasetStatus.CLEANED, record.status());
     }
 }

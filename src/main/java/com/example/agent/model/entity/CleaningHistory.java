@@ -1,5 +1,7 @@
 package com.example.agent.model.entity;
 
+import com.example.agent.model.enums.DatasetStatus;
+
 import java.time.LocalDateTime;
 
 public class CleaningHistory {
@@ -10,7 +12,7 @@ public class CleaningHistory {
     private String issuesJson;
     private String executedSql;
     private Long affectedRows;
-    private String status;
+    private DatasetStatus status;
     private String errorMessage;
     private LocalDateTime createdAt;
 
@@ -30,8 +32,8 @@ public class CleaningHistory {
     public void setExecutedSql(String executedSql) { this.executedSql = executedSql; }
     public Long getAffectedRows() { return affectedRows; }
     public void setAffectedRows(Long affectedRows) { this.affectedRows = affectedRows; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public DatasetStatus getStatus() { return status; }
+    public void setStatus(DatasetStatus status) { this.status = status; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
     public LocalDateTime getCreatedAt() { return createdAt; }
