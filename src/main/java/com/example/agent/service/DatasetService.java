@@ -242,7 +242,8 @@ public class DatasetService {
             dataset.getTableName(),
             columns,
             dataset.getRowCount(),
-            dataset.getCreatedAt()
+            dataset.getCreatedAt(),
+            dataset.getStatus()
         );
     }
 }

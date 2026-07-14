@@ -1,5 +1,6 @@
 package com.example.agent.model.entity;
 
+import com.example.agent.model.enums.DatasetStatus;
 import java.time.LocalDateTime;
 
 public class Dataset {
@@ -12,6 +13,9 @@ public class Dataset {
     private String columnInfo;
     private Long rowCount;
     private LocalDateTime createdAt;
+    private DatasetStatus status = DatasetStatus.READY;
+    private String rawTableName;
+    private String cleanedTableName;
 
     public Dataset() {}
 
@@ -43,4 +47,10 @@ public class Dataset {
     public void setRowCount(Long rowCount) { this.rowCount = rowCount; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public DatasetStatus getStatus() { return status; }
+    public void setStatus(DatasetStatus status) { this.status = status; }
+    public String getRawTableName() { return rawTableName; }
+    public void setRawTableName(String rawTableName) { this.rawTableName = rawTableName; }
+    public String getCleanedTableName() { return cleanedTableName; }
+    public void setCleanedTableName(String cleanedTableName) { this.cleanedTableName = cleanedTableName; }
 }
