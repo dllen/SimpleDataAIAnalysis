@@ -1,5 +1,6 @@
 package com.example.agent.model.dto;
 
+import com.example.agent.model.enums.DatasetStatus;
 import java.time.LocalDateTime;
 
 public record DatasetResponse(
@@ -9,5 +10,6 @@ public record DatasetResponse(
     String tableName,
     java.util.List<ColumnInfo> columns,
     Long rowCount,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    DatasetStatus status
 ) {}

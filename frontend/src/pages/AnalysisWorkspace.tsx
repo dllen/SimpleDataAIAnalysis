@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Layout, Upload, Button, message, Splitter } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { datasetApi } from '../api/dataset'
 import { analysisApi } from '../api/analysis'
 import { cleaningApi } from '../api/cleaning'
-import { CleaningExecutionRequest, DatasetResponse, DatasetStatus, ChatMessage, QueryResult } from '../types'
+import { DatasetResponse, ChatMessage, DatasetStatus, CleaningExecutionRequest } from '../types'
 import DatasetList from './DatasetList'
 import DataPreview from '../components/DataPreview'
 import ChatPanel from '../components/ChatPanel'
@@ -42,9 +42,8 @@ const AnalysisWorkspace: React.FC = () => {
     if (!selectedDataset) return
     setCleaningLoading(true)
     try {
-      const response = await cleaningApi.execute(selectedDataset.id, request)
-      const record = response.data
-      message.success(`清洗完成，影响 ${record.affectedRows} 行`)
+      await cleaningApi.execute(selectedDataset.id, request)
+      message.success('清洗完成')
       const refreshed = await datasetApi.get(selectedDataset.id)
       setSelectedDataset(refreshed)
     } catch (e: any) {

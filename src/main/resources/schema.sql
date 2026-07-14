@@ -14,7 +14,22 @@ CREATE TABLE IF NOT EXISTS datasets (
     column_info CLOB,
     row_count BIGINT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) DEFAULT 'READY' NOT NULL,
+    raw_table_name VARCHAR(128),
+    cleaned_table_name VARCHAR(128),
     FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS cleaning_history (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    dataset_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    issues_json TEXT,
+    executed_sql TEXT,
+    affected_rows BIGINT,
+    status VARCHAR(20) NOT NULL,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS analysis_conversation (

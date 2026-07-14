@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Input, Button, Spin, Tooltip } from 'antd'
 import { SendOutlined, CopyOutlined } from '@ant-design/icons'
-import { ChatMessage, CleaningExecutionRequest, CleaningProposal } from '../types'
+import { ChatMessage, CleaningExecutionRequest } from '../types'
 import SqlBlock from './SqlBlock'
 import { CleaningCard } from './CleaningCard'
 
@@ -68,25 +68,21 @@ const ChatPanel: React.FC<Props> = ({ messages, onSend, loading, onExecuteCleani
           <div key={msg.id} className={`message-item message-${msg.role}`}>
             {msg.role === 'user' ? (
               <div className="message-content">{msg.content}</div>
+            ) : msg.proposal ? (
+              <CleaningCard
+                proposal={msg.proposal}
+                onExecute={onExecuteCleaning || (() => {})}
+                onSaveAs={onSaveAsCleaning || (() => {})}
+                loading={loading}
+              />
             ) : (
               <div className="message-content">
-                {msg.proposal ? (
-                  <CleaningCard
-                    proposal={msg.proposal}
-                    onExecute={onExecuteCleaning || (() => {})}
-                    onSaveAs={onSaveAsCleaning || (() => {})}
-                    loading={loading}
-                  />
-                ) : (
-                  <>
-                    {msg.sql && <SqlBlock sql={msg.sql} />}
-                    {msg.content ? (
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                    ) : loading ? (
-                      <Spin size="small" />
-                    ) : null}
-                  </>
-                )}
+                {msg.sql && <SqlBlock sql={msg.sql} />}
+                {msg.content ? (
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                ) : loading ? (
+                  <Spin size="small" />
+                ) : null}
               </div>
             )}
           </div>
