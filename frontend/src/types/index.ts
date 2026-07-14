@@ -89,5 +89,6 @@ export interface ChatMessage {
   content: string
   sql?: string
   result?: QueryResult
+  proposal?: CleaningProposal
   timestamp: number
 }

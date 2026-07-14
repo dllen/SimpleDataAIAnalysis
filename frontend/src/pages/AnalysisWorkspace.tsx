@@ -3,7 +3,8 @@ import { Layout, Upload, Button, message, Splitter } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { datasetApi } from '../api/dataset'
 import { analysisApi } from '../api/analysis'
-import { DatasetResponse, ChatMessage, QueryResult } from '../types'
+import { cleaningApi } from '../api/cleaning'
+import { CleaningExecutionRequest, DatasetResponse, DatasetStatus, ChatMessage, QueryResult } from '../types'
 import DatasetList from './DatasetList'
 import DataPreview from '../components/DataPreview'
 import ChatPanel from '../components/ChatPanel'
@@ -15,6 +16,58 @@ const AnalysisWorkspace: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  const [cleaningLoading, setCleaningLoading] = useState(false)
+
+  const analyzeCleaning = async (datasetId: number) => {
+    setCleaningLoading(true)
+    try {
+      const response = await cleaningApi.analyze(datasetId)
+      const proposal = response.data
+      const aiMsg: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'ai',
+        content: proposal.summary,
+        proposal,
+        timestamp: Date.now(),
+      }
+      setMessages((prev) => [...prev, aiMsg])
+    } catch (e: any) {
+      message.error(e.response?.data?.message || '检测失败')
+    } finally {
+      setCleaningLoading(false)
+    }
+  }
+
+  const handleExecuteCleaning = async (request: CleaningExecutionRequest) => {
+    if (!selectedDataset) return
+    setCleaningLoading(true)
+    try {
+      const response = await cleaningApi.execute(selectedDataset.id, request)
+      const record = response.data
+      message.success(`清洗完成，影响 ${record.affectedRows} 行`)
+      const refreshed = await datasetApi.get(selectedDataset.id)
+      setSelectedDataset(refreshed)
+    } catch (e: any) {
+      message.error(e.response?.data?.message || '清洗失败')
+    } finally {
+      setCleaningLoading(false)
+    }
+  }
+
+  const handleSaveAsCleaning = async (request: CleaningExecutionRequest) => {
+    if (!selectedDataset) return
+    setCleaningLoading(true)
+    try {
+      const response = await cleaningApi.saveAs(selectedDataset.id, request)
+      const newDataset = response.data
+      message.success('已另存为新数据集')
+      setSelectedDataset(newDataset)
+    } catch (e: any) {
+      message.error(e.response?.data?.message || '另存失败')
+    } finally {
+      setCleaningLoading(false)
+    }
+  }
 
   const handleUpload = async (file: File) => {
     try {
@@ -23,6 +76,10 @@ const AnalysisWorkspace: React.FC = () => {
       message.success({ content: '上传成功', key: 'upload' })
       setSelectedDataset(dataset)
       setMessages([])
+
+      if (dataset.status === DatasetStatus.PENDING_CLEAN) {
+        await analyzeCleaning(dataset.id)
+      }
     } catch (e: any) {
       message.error({ content: e.response?.data?.message || '上传失败', key: 'upload' })
     }
@@ -37,6 +94,12 @@ const AnalysisWorkspace: React.FC = () => {
   const handleSendMessage = async (question: string) => {
     if (!selectedDataset) {
       message.warning('请先选择数据集')
+      return
+    }
+
+    const CLEANING_KEYWORDS = ['清洗', 'clean', '清理', '数据清洗']
+    if (CLEANING_KEYWORDS.some(k => question.toLowerCase().includes(k))) {
+      await analyzeCleaning(selectedDataset.id)
       return
     }
 
@@ -125,7 +188,9 @@ const AnalysisWorkspace: React.FC = () => {
                 <ChatPanel
                   messages={messages}
                   onSend={handleSendMessage}
-                  loading={loading || streaming}
+                  loading={loading || streaming || cleaningLoading}
+                  onExecuteCleaning={handleExecuteCleaning}
+                  onSaveAsCleaning={handleSaveAsCleaning}
                 />
               </Splitter.Panel>
               <Splitter.Panel>
