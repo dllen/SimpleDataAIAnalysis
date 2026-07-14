@@ -5,6 +5,7 @@ import com.example.agent.model.dto.QueryResult;
 import com.example.agent.model.dto.AnalysisResponse;
 import com.example.agent.model.entity.Dataset;
 import com.example.agent.exception.BusinessException;
+import com.example.agent.model.enums.DatasetStatus;
 import com.example.agent.repository.DatasetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,13 @@ public class AnalysisService {
         Dataset dataset = datasetRepository.findByIdAndUserId(datasetId, userId)
                 .orElseThrow(() -> new BusinessException("数据集不存在或无权限"));
 
+        if (dataset.getStatus() == DatasetStatus.PENDING_CLEAN) {
+            throw new BusinessException("数据集需要先清洗，请使用清洗功能后再分析");
+        }
+        if (dataset.getStatus() == DatasetStatus.FAILED) {
+            throw new BusinessException("数据集状态异常，请重新上传");
+        }
+
         List<ColumnInfo> columns = duckDbService.getSchema(userId, dataset.getTableName());
         String schemaStr = formatSchema(columns);
 
@@ -66,6 +74,13 @@ public class AnalysisService {
     public Flux<String> analyzeStream(Long userId, Long datasetId, String question) throws SQLException {
         Dataset dataset = datasetRepository.findByIdAndUserId(datasetId, userId)
                 .orElseThrow(() -> new BusinessException("数据集不存在或无权限"));
+
+        if (dataset.getStatus() == DatasetStatus.PENDING_CLEAN) {
+            throw new BusinessException("数据集需要先清洗，请使用清洗功能后再分析");
+        }
+        if (dataset.getStatus() == DatasetStatus.FAILED) {
+            throw new BusinessException("数据集状态异常，请重新上传");
+        }
 
         List<ColumnInfo> columns = duckDbService.getSchema(userId, dataset.getTableName());
         String schemaStr = formatSchema(columns);
