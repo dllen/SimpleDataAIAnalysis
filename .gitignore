@@ -73,3 +73,7 @@ spring.log
 build/
 out/
 .gradle/
+
+# Worktrees
+.worktrees/
+worktrees/
