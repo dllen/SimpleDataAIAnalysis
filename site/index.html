@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data Analysis Agent - 个人数据问答助手</title>
+  <meta name="description" content="面向非专业用户的个人数据问答助手。上传表格数据后，直接用自然语言获得分析结论、图表和建议。" />
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #111827;
+      --muted: #4b5563;
+      --subtle: #9ca3af;
+      --line: #e5e7eb;
+      --bg: #ffffff;
+      --surface: #f8fafc;
+      --ring: #e2e8f0;
+      --blue: #2563eb;
+      --indigo: #4f46e5;
+      --shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .container {
+      width: min(1200px, calc(100% - 32px));
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 18px;
+      padding-bottom: 18px;
+    }
+
+    .logo {
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo span {
+      color: var(--blue);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      font-size: 14px;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+
+    .btn-primary {
+      color: white;
+      background: linear-gradient(135deg, var(--blue), var(--indigo));
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.18);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
+    }
+
+    .btn-secondary {
+      color: var(--ink);
+      background: var(--surface);
+      border-color: var(--ring);
+    }
+
+    .btn-secondary:hover {
+      border-color: #cbd5e1;
+    }
+
+    .hero {
+      padding-top: 64px;
+      padding-bottom: 64px;
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(79, 70, 229, 0.07), transparent 35%),
+        linear-gradient(180deg, #ffffff, #f8fafc);
+    }
+
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .eyebrow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #16a34a;
+    }
+
+    .hero h1 {
+      margin: 0 0 18px;
+      font-size: clamp(32px, 4.4vw, 52px);
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .hero p {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: clamp(15px, 1.6vw, 17px);
+      max-width: 56ch;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .hero-proof {
+      margin-top: 20px;
+      color: var(--subtle);
+      font-size: 12px;
+    }
+
+    .hero-card {
+      position: relative;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, #111827, #0b1220);
+      color: #e5e7eb;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .hero-card-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .hero-card-body {
+      padding: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .accent {
+      color: #93c5fd;
+    }
+
+    .section {
+      padding-top: 60px;
+      padding-bottom: 60px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-label {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .section-title {
+      margin: 10px 0 12px;
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .section-subtitle {
+      margin: 0;
+      color: var(--muted);
+      max-width: 68ch;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      padding: 20px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: #cbd5e1;
+    }
+
+    .card h3 {
+      margin: 8px 0 8px;
+      font-size: 16px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(79, 70, 229, 0.12));
+      color: var(--indigo);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    .step {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      padding: 22px;
+      background: var(--surface);
+    }
+
+    .step-num {
+      margin-bottom: 12px;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .step h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .feature-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .feature-grid-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .feature-grid-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .surface-section {
+      background: var(--surface);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .data {
+      margin-top: 20px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #111827;
+      color: #e5e7eb;
+      padding: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.75;
+      overflow-x: auto;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid var(--ring);
+      padding: 5px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #ffffff;
+    }
+
+    .faq-item {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      padding: 18px;
+    }
+
+    .faq-item h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+
+    .faq-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .footer {
+      padding-top: 36px;
+      padding-bottom: 36px;
+      border-top: 1px solid var(--line);
+      color: var(--subtle);
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    @media (max-width: 900px) {
+      .hero-inner, .steps, .feature-grid, .feature-grid-2, .feature-grid-3 {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav-inner">
+      <a href="/" class="logo">Data Analysis <span>Agent</span></a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#how-it-works">工作流</a>
+        <a href="#security">安全</a>
+        <a href="#faq">常见问题</a>
+        <a href="#roadmap">路线图</a>
+      </nav>
+      <a class="btn btn-primary" href="https://github.com/shichaopeng/java-duckdb-demo">查看源码</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-inner">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> 基于 Spring AI + DuckDB</div>
+          <h1>把 Excel 扔进去，直接用中文问数据</h1>
+          <p>面向非专业用户的个人数据问答助手。上传 CSV、Excel 或 JSON，系统自动识别字段、发现脏数据、生成分析结论、图表和建议，而不需要你先学会 SQL。</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#features">了解核心功能</a>
+            <a class="btn btn-secondary" href="https://github.com/shichaopeng/java-duckdb-demo">阅读源码</a>
+          </div>
+          <div class="hero-proof">适用人群：运营 / 财务 / 学生 / 副业者 / 内容创作者</div>
+        </div>
+
+        <div class="hero-card" aria-label="示例对话">
+          <div class="hero-card-header">
+            <span class="hero-card-dot" style="background:#ef4444"></span>
+            <span class="hero-card-dot" style="background:#f59e0b"></span>
+            <span class="hero-card-dot" style="background:#22c55e"></span>
+            <span style="color:#9ca3af;font-size:12px">analysis-workspace</span>
+          </div>
+          <div class="hero-card-body">
+            <div>
+              <span style="color:#9ca3af">用户：</span>
+              <span>这份订单数据里哪个类别卖得最多？</span>
+            </div>
+            <div>
+              <span style="color:#9ca3af">Agent：</span>
+              <span>已查询 24,810 行订单记录，<span class="accent">电子配件类</span>销量最高。</span>
+            </div>
+            <div>
+              <span style="color:#9ca3af">结果：</span>
+              <span>TOP 3 = 电子配件 / 家居用品 / 食品饮料</span>
+            </div>
+            <div>
+              <span style="color:#9ca3af">建议：</span>
+              <span>建议优先补货“电子配件”，并查看近 7 天复购率。</span>
+            </div>
+            <div>
+              <span style="color:#9ca3af">图表：</span>
+              <span>已自动生成柱状图，可直接导出。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="how-it-works">
+      <div class="container">
+        <div class="section-label">工作流</div>
+        <h2 class="section-title">三步完成一次真实数据分析</h2>
+        <p class="section-subtitle">不需要配置复杂数据源，不需要手写 SQL，上传文件后即可开始对话式分析。</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">Step 01</div>
+            <h3>上传文件</h3>
+            <p>支持 CSV、Excel、JSON。系统自动解析字段、推断类型，并检查是否存在缺失值、异常值或格式问题。</p>
+          </div>
+          <div class="step">
+            <div class="step-num">Step 02</div>
+            <h3>AI 分析与清洗</h3>
+            <p>基于 Spring AI 生成 SQL，由 DuckDB 执行；发现脏数据时会给出清洗建议，并可回滚保存清洗前后结果。</p>
+          </div>
+          <div class="step">
+            <div class="step-num">Step 03</div>
+            <h3>查看结论与图表</h3>
+            <p>不只是返回表格，还会生成自然语言结论、可视化图表、推荐追问，支持导出或继续深挖分析。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-label">功能说明</div>
+        <h2 class="section-title">为“普通人分析数据”设计的系统能力</h2>
+        <p class="section-subtitle">当前系统已具备从上传、清洗、分析到可视化的完整闭环，并持续向 SaaS 体验演进。</p>
+        <div class="grid feature-grid" style="margin-top:24px">
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <h3>多格式上传</h3>
+            <p>支持 CSV、Excel、JSON，自动识别字段与基础类型，减少用户手动整理成本。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3>自然语言分析</h3>
+            <p>用户用中文提问，系统自动生成 SQL 并执行，再返回自然语言答案，而不是只展示原始查询结果。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div>
+            <h3>两步法 Text-to-SQL</h3>
+            <p>LLM 生成 SQL，DuckDB 执行查询，再由 LLM 将结果翻译成用户容易理解的结论。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-4"/></svg>
+            </div>
+            <h3>数据可视化</h3>
+            <p>自动生成图表，例如柱状图、饼图等，帮助用户快速理解数据分布和趋势。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+            </div>
+            <h3>数据清洗建议</h3>
+            <p>自动扫描缺失值、异常值、重复数据与列名问题，给出可执行清洗建议，并支持保存或回滚。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+            </div>
+            <h3>多轮对话</h3>
+            <p>支持上下文连续问答，用户可以在上一轮结论基础上继续追问，获得更深层分析。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+            <h3>流式响应</h3>
+            <p>基于 SSE 推送分析结果，减少等待感，让对话体验更像实时助手。</p>
+          </div>
+          <div class="card">
+            <div class="icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <h3>用户隔离与安全</h3>
+            <p>JWT 认证、多用户数据隔离、SQL 只读沙箱，避免越权访问和危险执行。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section surface-section" id="security">
+      <div class="container">
+        <div class="section-label">安全说明</div>
+        <h2 class="section-title">我们重视数据安全与使用边界</h2>
+        <p class="section-subtitle">对于表格数据类产品，用户最关心的问题不是“功能多不多”，而是“敢不敢传”。因此系统把安全设计当成核心能力，而不是附加功能。</p>
+        <div class="grid feature-grid-2" style="margin-top:24px">
+          <div class="card">
+            <h3>多用户数据隔离</h3>
+            <p>不同用户的数据在存储和查询层面保持隔离，避免共享或误访问他人文件。</p>
+          </div>
+          <div class="card">
+            <h3>SQL 只读沙箱</h3>
+            <p>分析阶段限制为只读执行边界，降低误删数据或执行危险语句的风险。</p>
+          </div>
+          <div class="card">
+            <h3>清洗可回滚</h3>
+            <p>自动检测到脏数据后，清洗执行前可备份，失败后回滚，避免原始数据丢失。</p>
+          </div>
+          <div class="card">
+            <h3>最小权限原则</h3>
+            <p>系统按分析需要执行最小权限操作，不做无关写入，也不额外暴露内部数据。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="stack">
+      <div class="container">
+        <div class="section-label">技术栈</div>
+        <h2 class="section-title">清晰、可演进、适合持续交付</h2>
+        <p class="section-subtitle">系统采用主流成熟技术栈，兼顾开发效率、运行性能和后续 SaaS 扩展能力。</p>
+        <div class="grid feature-grid-2" style="margin-top:24px">
+          <div class="card">
+            <h3>后端</h3>
+            <p>Java 17 + Spring Boot 3，Spring AI 接入兼容 OpenAI 接口的大模型，Spring Security + JWT 负责认证。</p>
+          </div>
+          <div class="card">
+            <h3>分析引擎</h3>
+            <p>DuckDB 作为嵌入式分析引擎，支持快速执行 SQL、处理文件型数据查询，并具备列式分析优势。</p>
+          </div>
+          <div class="card">
+            <h3>前端</h3>
+            <p>React + TypeScript + Vite，状态管理、HTTP 请求与可视化组件清晰分离，便于迭代界面与交互。</p>
+          </div>
+          <div class="card">
+            <h3>可视化与交互</h3>
+            <p>ECharts 提供图表能力，Zustand 管理会话状态，Ant Design 提供一致的组件体验。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="files">
+      <div class="container">
+        <div class="section-label">支持文件</div>
+        <h2 class="section-title">常见表格格式都能直接分析</h2>
+        <p class="section-subtitle">系统围绕最常见的个人和职场文件格式设计，减少用户格式转换成本。</p>
+        <div class="grid feature-grid-3" style="margin-top:24px">
+          <div class="card">
+            <h3>CSV</h3>
+            <p>最常见的数据交换格式，适合快速上传并分析结构化表格。</p>
+          </div>
+          <div class="card">
+            <h3>Excel</h3>
+            <p>支持 .xlsx / .xls，解析工作表、表头与常见字段类型。</p>
+          </div>
+          <div class="card">
+            <h3>JSON</h3>
+            <p>支持 JSON 数据导入，适合半结构化数据和接口导出结果分析。</p>
+          </div>
+        </div>
+
+        <div class="data" aria-label="系统概念示例">
+          <span style="color:#9ca3af">// 系统会在内部把文件解析成可分析结构，例如：</span><br/>
+          <span style="color:#60a5fa">Dataset</span> = {<br/>
+          &nbsp;&nbsp;id, user_id, original_name, file_type, storage_path,<br/>
+          &nbsp;&nbsp;table_name, status, raw_table_name, cleaned_table_name, created_at<br/>
+          }<br/>
+          <br/>
+          <span style="color:#9ca3af">// 常见分析请求流转：</span><br/>
+          <span style="color:#34d399">上传文件</span> → <span style="color:#34d399">解析字段</span> → <span style="color:#34d399">生成 SQL</span> → <span style="color:#34d399">执行查询</span> → <span style="color:#34d399">生成结论</span> → <span style="color:#34d399">返回图表</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="roadmap">
+      <div class="container">
+        <div class="section-label">路线图</div>
+        <h2 class="section-title">从可用产品，走向更好用的 SaaS</h2>
+        <p class="section-subtitle">当前系统已经具备核心分析能力；接下来的重点是降低使用门槛、提升信任感和构建付费闭环。</p>
+        <div class="grid feature-grid-3" style="margin-top:24px">
+          <div class="card">
+            <h3>Phase 1：核心体验版</h3>
+            <p>优先完成游客演示体验、上传分析、基础可视化、登录注册和最小额度体系，让用户先完成第一次真实分析。</p>
+          </div>
+          <div class="card">
+            <h3>Phase 2：助手感增强版</h3>
+            <p>增加自动推荐问题、AI 结论摘要、自动清洗建议、会话保存与继续追问，提升留存和付费转化。</p>
+          </div>
+          <div class="card">
+            <h3>Phase 3：留存与增长版</h3>
+            <p>上线场景模板库、结果分享/导出、新手引导、基础运营看板，形成更稳定的增长和商业化闭环。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section surface-section" id="faq">
+      <div class="container">
+        <div class="section-label">常见问题</div>
+        <h2 class="section-title">关于这个项目的几个常见问题</h2>
+        <div class="grid feature-grid-2" style="margin-top:24px">
+          <div class="faq-item">
+            <h3>这个系统适合谁用？</h3>
+            <p>适合经常处理 Excel、但不会也不想学 SQL/BI 的用户，例如运营、财务、学生、副业者和内容创作者。</p>
+          </div>
+          <div class="faq-item">
+            <h3>用户上传的数据会被用于训练模型吗？</h3>
+            <p>当前设计强调用户数据隔离与安全边界，系统按分析需要执行最小权限操作，不做超出分析用途的数据滥用。</p>
+          </div>
+          <div class="faq-item">
+            <h3>如果数据有脏值怎么办？</h3>
+            <p>系统会自动检测缺失值、异常值、重复数据和列名问题，并给出清洗建议；清洗执行前可备份，失败可回滚。</p>
+          </div>
+          <div class="faq-item">
+            <h3>后续会支持哪些扩展能力？</h3>
+            <p>后续会围绕场景模板、结果导出、会话保存、模型切换、运营看板等能力继续演进，提升长期使用价值。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div>Data Analysis Agent · 个人数据问答助手</div>
+      <div>
+        <a href="https://github.com/shichaopeng/java-duckdb-demo" target="_blank" rel="noreferrer">GitHub</a>
+        <span style="margin:0 8px;color:var(--line)">|</span>
+        <a href="docs/superpowers/specs/2026-07-17-saas-personal-data-assistant-design.md">产品设计文档</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
