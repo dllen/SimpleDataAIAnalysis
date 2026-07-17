@@ -1,22 +1,31 @@
 import React, { useState } from 'react'
-import { Layout, Upload, Button, message, Splitter } from 'antd'
-import { UploadOutlined } from '@ant-design/icons'
+import { Layout, Upload, Button, message, Splitter, Tooltip, Typography, Tag } from 'antd'
+import { UploadOutlined, ThunderboltOutlined, SaveOutlined } from '@ant-design/icons'
 import { datasetApi } from '../api/dataset'
 import { analysisApi } from '../api/analysis'
 import { cleaningApi } from '../api/cleaning'
 import { DatasetResponse, ChatMessage, DatasetStatus, CleaningExecutionRequest } from '../types'
-import DatasetList from './DatasetList'
+import DatasetList from '../components/DatasetList'
 import DataPreview from '../components/DataPreview'
 import ChatPanel from '../components/ChatPanel'
+import WorkspaceLayout from '../components/WorkspaceLayout'
 
 const { Header, Sider, Content } = Layout
+const { Text } = Typography
 
 const AnalysisWorkspace: React.FC = () => {
+  const [selectedDatasetId, setSelectedDatasetId] = useState<number | null>(null)
   const [selectedDataset, setSelectedDataset] = useState<DatasetResponse | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [cleaningLoading, setCleaningLoading] = useState(false)
+
+  const refreshDataset = async (datasetId: number) => {
+    const refreshed = await datasetApi.get(datasetId)
+    setSelectedDataset(refreshed)
+    return refreshed
+  }
 
   const analyzeCleaning = async (datasetId: number) => {
     setCleaningLoading(true)
@@ -39,13 +48,15 @@ const AnalysisWorkspace: React.FC = () => {
   }
 
   const handleExecuteCleaning = async (request: CleaningExecutionRequest) => {
-    if (!selectedDataset) return
+    if (!selectedDatasetId) return
     setCleaningLoading(true)
     try {
-      await cleaningApi.execute(selectedDataset.id, request)
+      await cleaningApi.execute(selectedDatasetId, request)
       message.success('清洗完成')
-      const refreshed = await datasetApi.get(selectedDataset.id)
-      setSelectedDataset(refreshed)
+      const refreshed = await refreshDataset(selectedDatasetId)
+      if (refreshed.status === DatasetStatus.PENDING_CLEAN) {
+        await analyzeCleaning(refreshed.id)
+      }
     } catch (e: any) {
       message.error(e.response?.data?.message || '清洗失败')
     } finally {
@@ -54,13 +65,15 @@ const AnalysisWorkspace: React.FC = () => {
   }
 
   const handleSaveAsCleaning = async (request: CleaningExecutionRequest) => {
-    if (!selectedDataset) return
+    if (!selectedDatasetId) return
     setCleaningLoading(true)
     try {
-      const response = await cleaningApi.saveAs(selectedDataset.id, request)
+      const response = await cleaningApi.saveAs(selectedDatasetId, request)
       const newDataset = response.data
       message.success('已另存为新数据集')
+      setSelectedDatasetId(newDataset.id)
       setSelectedDataset(newDataset)
+      setMessages([])
     } catch (e: any) {
       message.error(e.response?.data?.message || '另存失败')
     } finally {
@@ -73,6 +86,7 @@ const AnalysisWorkspace: React.FC = () => {
       message.loading({ content: '上传中...', key: 'upload' })
       const dataset = await datasetApi.upload(file)
       message.success({ content: '上传成功', key: 'upload' })
+      setSelectedDatasetId(dataset.id)
       setSelectedDataset(dataset)
       setMessages([])
 
@@ -86,19 +100,23 @@ const AnalysisWorkspace: React.FC = () => {
   }
 
   const handleSelectDataset = (dataset: DatasetResponse) => {
+    if (!dataset?.id || dataset.id === selectedDatasetId) {
+      return
+    }
+    setSelectedDatasetId(dataset.id)
     setSelectedDataset(dataset)
     setMessages([])
   }
 
   const handleSendMessage = async (question: string) => {
-    if (!selectedDataset) {
+    if (!selectedDatasetId) {
       message.warning('请先选择数据集')
       return
     }
 
     const CLEANING_KEYWORDS = ['清洗', 'clean', '清理', '数据清洗']
-    if (CLEANING_KEYWORDS.some(k => question.toLowerCase().includes(k))) {
-      await analyzeCleaning(selectedDataset.id)
+    if (CLEANING_KEYWORDS.some((k) => question.toLowerCase().includes(k))) {
+      await analyzeCleaning(selectedDatasetId)
       return
     }
 
@@ -121,7 +139,7 @@ const AnalysisWorkspace: React.FC = () => {
     setMessages((prev) => [...prev, aiMsg])
 
     try {
-      await analysisApi.analyzeStream(selectedDataset.id, { question }, (eventType, data) => {
+      await analysisApi.analyzeStream(selectedDatasetId, { question }, (eventType, data) => {
         setMessages((prev) => {
           const newMessages = [...prev]
           const lastMsg = newMessages[newMessages.length - 1]
@@ -163,27 +181,19 @@ const AnalysisWorkspace: React.FC = () => {
   }
 
   return (
-    <Layout style={{ height: '100vh' }}>
-      <Header style={{ background: '#fff', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h2 style={{ margin: 0 }}>数据分析 AI Agent</h2>
-        <Upload
-          beforeUpload={handleUpload}
-          showUploadList={false}
-          accept=".csv,.xlsx,.xls,.json"
-        >
-          <Button type="primary" icon={<UploadOutlined />}>
-            上传数据文件
-          </Button>
-        </Upload>
-      </Header>
-      <Layout>
-        <Sider width={280} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
-          <DatasetList onSelect={handleSelectDataset} selectedId={selectedDataset?.id} />
+    <WorkspaceLayout
+      title="数据分析 AI Agent"
+      dataset={selectedDataset}
+      onUploadClick={() => document.getElementById('workspace-upload-input')?.click()}
+    >
+      <Layout style={{ height: '100%' }}>
+        <Sider width={272} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
+          <DatasetList onSelect={handleSelectDataset} selectedId={selectedDatasetId} />
         </Sider>
-        <Content style={{ background: '#f0f2f5', padding: 16 }}>
+        <Content style={{ background: '#f5f7fa', padding: 16 }}>
           {selectedDataset ? (
-            <Splitter style={{ height: '100%', background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
-              <Splitter.Panel defaultSize="60%" min="30%" max="80%">
+            <Splitter style={{ height: '100%', background: '#fff', borderRadius: 12, overflow: 'hidden' }}>
+              <Splitter.Panel defaultSize="58%" min="30%" max="78%">
                 <ChatPanel
                   messages={messages}
                   onSend={handleSendMessage}
@@ -197,17 +207,33 @@ const AnalysisWorkspace: React.FC = () => {
               </Splitter.Panel>
             </Splitter>
           ) : (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#999' }}>
-              <div style={{ textAlign: 'center' }}>
-                <UploadOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                <p>上传数据文件开始分析</p>
-                <p style={{ fontSize: 12 }}>支持 CSV、Excel(.xlsx/.xls)、JSON 格式</p>
+            <div className="workspace-empty">
+              <div className="workspace-empty-inner">
+                <UploadOutlined style={{ fontSize: 36, color: '#94a3b8' }} />
+                <div className="workspace-title" style={{ marginTop: 12 }}>
+                  上传数据文件，开始分析
+                </div>
+                <Text type="secondary" style={{ marginTop: 8 }}>
+                  支持 CSV、Excel(.xlsx/.xls)、JSON 格式
+                </Text>
+                <div style={{ marginTop: 16 }}>
+                  <Upload
+                    id="workspace-upload-input"
+                    beforeUpload={handleUpload}
+                    showUploadList={false}
+                    accept=".csv,.xlsx,.xls,.json"
+                  >
+                    <Button type="primary" icon={<UploadOutlined />}>
+                      上传文件
+                    </Button>
+                  </Upload>
+                </div>
               </div>
             </div>
           )}
         </Content>
       </Layout>
-    </Layout>
+    </WorkspaceLayout>
   )
 }
 

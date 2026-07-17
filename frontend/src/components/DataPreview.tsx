@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Table, Tag, Spin, Empty, Tabs } from 'antd'
+import { Card, Table, Tag, Spin, Empty, Tabs, Typography, Space, Divider } from 'antd'
 import { datasetApi } from '../api/dataset'
 import { DatasetResponse, QueryResult, ColumnInfo } from '../types'
 import ReactECharts from 'echarts-for-react'
+
+const { Text } = Typography
 
 interface Props {
   dataset: DatasetResponse
@@ -153,8 +155,22 @@ const DataPreview: React.FC<Props> = ({ dataset }) => {
 
   return (
     <Card
-      title={`数据预览: ${dataset.fileName}`}
-      styles={{ body: { height: 'calc(100% - 57px)', overflow: 'auto' } }}
+      className="preview-pane"
+      size="small"
+      title={
+        <Space>
+          <Text strong>数据预览</Text>
+          <Divider type="vertical" />
+          <Text ellipsis style={{ maxWidth: 260 }}>{dataset.fileName}</Text>
+          <Tag color="blue">{dataset.fileType.toUpperCase()}</Tag>
+          {preview ? (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              共 {preview.totalRows?.toLocaleString?.() ?? preview.totalRows} 行 · 查询耗时 {preview.executionTimeMs}ms
+            </Text>
+          ) : null}
+        </Space>
+      }
+      styles={{ body: { height: 'calc(100% - 46px)', padding: 12, overflow: 'hidden' } }}
     >
       <Tabs items={tabItems} size="small" />
     </Card>
