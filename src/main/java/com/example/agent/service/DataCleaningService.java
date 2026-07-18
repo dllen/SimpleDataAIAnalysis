@@ -17,7 +17,6 @@ import java.util.List;
 
 @Service
 public class DataCleaningService {
-
     private static final Logger log = LoggerFactory.getLogger(DataCleaningService.class);
 
     private final DataQualityScanner scanner;
@@ -50,6 +49,13 @@ public class DataCleaningService {
     @Transactional
     public CleaningHistoryRecord execute(Long userId, Long datasetId, String tableName,
                                          CleaningExecutionRequest request) throws SQLException {
+        if (datasetId == null) {
+            throw new BusinessException("数据集不存在");
+        }
+        Dataset dataset = datasetRepository.findByIdAndUserId(datasetId, userId)
+                .orElseThrow(() -> new BusinessException("数据集不存在"));
+        CleaningProposal proposal = analyze(userId, datasetId, tableName);
+
         CleaningHistory history = new CleaningHistory();
         history.setDatasetId(datasetId);
         history.setUserId(userId);
@@ -64,8 +70,10 @@ public class DataCleaningService {
             long affectedRows = 0;
 
             if (request.selectedIssueIndexes() != null && !request.selectedIssueIndexes().isEmpty()) {
-                CleaningProposal proposal = analyze(userId, datasetId, tableName);
                 for (int idx : request.selectedIssueIndexes()) {
+                    if (idx < 0 || idx >= proposal.issues().size()) {
+                        throw new BusinessException("未找到要执行的清洗项");
+                    }
                     CleaningIssue issue = proposal.issues().get(idx);
                     String sql = issue.defaultSql();
                     if (request.customSqls() != null && request.customSqls().size() > idx) {
@@ -83,8 +91,6 @@ public class DataCleaningService {
             history.setStatus(DatasetStatus.CLEANED);
             historyRepository.save(history);
 
-            Dataset dataset = datasetRepository.findById(datasetId)
-                    .orElseThrow(() -> new BusinessException("数据集不存在"));
             dataset.setStatus(DatasetStatus.CLEANED);
             dataset.setCleanedTableName(tableName);
             datasetRepository.save(dataset);
@@ -96,6 +102,10 @@ public class DataCleaningService {
             history.setStatus(DatasetStatus.FAILED);
             history.setErrorMessage(e.getMessage());
             historyRepository.save(history);
+
+            dataset.setStatus(DatasetStatus.FAILED);
+            datasetRepository.save(dataset);
+
             try {
                 if (duckDbService.tableExists(userId, backupTable)) {
                     duckDbService.dropTableIfExists(userId, tableName);
@@ -111,39 +121,86 @@ public class DataCleaningService {
     @Transactional
     public Dataset saveAs(Long userId, Long datasetId, String tableName,
                           CleaningExecutionRequest request) throws SQLException {
-        CleaningHistoryRecord record = execute(userId, datasetId, tableName, request);
-        if (record.status() != DatasetStatus.CLEANED) {
-            throw new BusinessException("清洗失败，无法另存");
+        if (datasetId == null) {
+            throw new BusinessException("数据集不存在");
         }
-
-        Dataset source = datasetRepository.findById(datasetId)
+        Dataset source = datasetRepository.findByIdAndUserId(datasetId, userId)
                 .orElseThrow(() -> new BusinessException("数据集不存在"));
+        CleaningProposal proposal = analyze(userId, datasetId, tableName);
+
+        CleaningHistory history = new CleaningHistory();
+        history.setDatasetId(datasetId);
+        history.setUserId(userId);
+        history.setStatus(DatasetStatus.PENDING_CLEAN);
+        history = historyRepository.save(history);
 
         String newTableName = tableName + "_cleaned_" + System.currentTimeMillis();
         String newRawTableName = "_raw_" + newTableName;
-        duckDbService.cloneTable(userId, tableName, newTableName);
-        duckDbService.renameTable(userId, tableName, newRawTableName);
 
-        Dataset newDataset = new Dataset();
-        newDataset.setUserId(userId);
-        newDataset.setFileName("(cleaned) " + source.getFileName());
-        newDataset.setFileType(source.getFileType());
-        newDataset.setTableName(newTableName);
-        newDataset.setRawTableName(newRawTableName);
-        newDataset.setColumnInfo(source.getColumnInfo());
-        newDataset.setRowCount(source.getRowCount());
-        newDataset.setStatus(DatasetStatus.CLEANED);
-        newDataset = datasetRepository.save(newDataset);
+        try {
+            duckDbService.cloneTable(userId, tableName, newTableName);
+            duckDbService.renameTable(userId, tableName, newRawTableName);
 
-        String backupTable = "_backup_" + tableName;
-        if (duckDbService.tableExists(userId, backupTable)) {
-            duckDbService.dropTableIfExists(userId, tableName);
-            duckDbService.renameTable(userId, backupTable, tableName);
+            StringBuilder executedSql = new StringBuilder();
+            long affectedRows = 0;
+
+            if (request.selectedIssueIndexes() != null && !request.selectedIssueIndexes().isEmpty()) {
+                for (int idx : request.selectedIssueIndexes()) {
+                    if (idx < 0 || idx >= proposal.issues().size()) {
+                        throw new BusinessException("未找到要执行的清洗项");
+                    }
+                    CleaningIssue issue = proposal.issues().get(idx);
+                    String sql = issue.defaultSql();
+                    if (request.customSqls() != null && request.customSqls().size() > idx) {
+                        String custom = request.customSqls().get(idx);
+                        if (custom != null && !custom.isBlank()) sql = custom;
+                    }
+                    long rows = duckDbService.executeCleaningSql(userId, sql);
+                    affectedRows += rows;
+                    executedSql.append(sql).append(";\n");
+                }
+            }
+
+            Dataset newDataset = new Dataset();
+            newDataset.setUserId(userId);
+            newDataset.setFileName("(cleaned) " + source.getFileName());
+            newDataset.setFileType(source.getFileType());
+            newDataset.setTableName(newTableName);
+            newDataset.setRawTableName(newRawTableName);
+            newDataset.setColumnInfo(source.getColumnInfo());
+            newDataset.setRowCount(source.getRowCount());
+            newDataset.setStatus(DatasetStatus.CLEANED);
+            newDataset = datasetRepository.save(newDataset);
+
+            history.setExecutedSql(executedSql.toString());
+            history.setAffectedRows(affectedRows);
+            history.setStatus(DatasetStatus.CLEANED);
+            historyRepository.save(history);
+
+            source.setStatus(DatasetStatus.READY);
+            source.setTableName(newTableName);
+            source.setRawTableName(newRawTableName);
+            datasetRepository.save(source);
+
+            return newDataset;
+
+        } catch (Exception e) {
+            history.setStatus(DatasetStatus.FAILED);
+            history.setErrorMessage(e.getMessage());
+            historyRepository.save(history);
+
+            try {
+                if (duckDbService.tableExists(userId, newTableName)) {
+                    duckDbService.dropTableIfExists(userId, newTableName);
+                }
+                if (duckDbService.tableExists(userId, newRawTableName)) {
+                    duckDbService.renameTable(userId, newRawTableName, tableName);
+                }
+            } catch (SQLException ex) {
+                log.warn("Rollback failed during save-as cleaning execution: {}", ex.getMessage());
+            }
+            throw new BusinessException("清洗另存失败: " + e.getMessage());
         }
-        source.setStatus(DatasetStatus.PENDING_CLEAN);
-        datasetRepository.save(source);
-
-        return newDataset;
     }
 
     private CleaningHistoryRecord toRecord(CleaningHistory h) {

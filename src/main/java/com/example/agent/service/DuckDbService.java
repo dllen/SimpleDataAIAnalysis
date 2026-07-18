@@ -8,14 +8,18 @@ import org.springframework.stereotype.Service;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 public class DuckDbService {
 
     private static final Logger log = LoggerFactory.getLogger(DuckDbService.class);
     private static final int MAX_RESULT_ROWS = 10000;
+    private static final Pattern VALID_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
     private static final Set<String> ALLOWED_CLEANING_KEYWORDS = Set.of(
         "CREATE TABLE AS SELECT", "INSERT INTO SELECT", "UPDATE", "DELETE", "ALTER", "DROP TABLE IF EXISTS"
     );
@@ -29,6 +33,8 @@ public class DuckDbService {
     public record DatasetMeta(String tableName, String fileType, long rowCount, List<ColumnInfo> columns) {}
 
     public DatasetMeta loadCsv(Long userId, String filePath, String tableName) throws SQLException {
+        validateFilePath(filePath);
+        validateTableName(tableName);
         return connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE " + tableName + " AS FROM read_csv('" + filePath + "', auto_detect=true)");
@@ -38,6 +44,8 @@ public class DuckDbService {
     }
 
     public DatasetMeta loadJson(Long userId, String filePath, String tableName) throws SQLException {
+        validateFilePath(filePath);
+        validateTableName(tableName);
         return connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE " + tableName + " AS FROM read_json_auto('" + filePath + "')");
@@ -47,12 +55,25 @@ public class DuckDbService {
     }
 
     public DatasetMeta loadFromSql(Long userId, String sql, String tableName, String fileType) throws SQLException {
+        validateTableName(tableName);
         return connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE " + tableName + " AS " + sql);
             }
             return loadDatasetMeta(userId, tableName, fileType);
         });
+    }
+
+    public DatasetMeta loadExternalCsv(Long userId, String filePath, String tableName) throws SQLException {
+        validateFilePath(filePath);
+        validateTableName(tableName);
+        return loadCsv(userId, filePath, tableName);
+    }
+
+    public DatasetMeta loadExternalJson(Long userId, String filePath, String tableName) throws SQLException {
+        validateFilePath(filePath);
+        validateTableName(tableName);
+        return loadJson(userId, filePath, tableName);
     }
 
     private DatasetMeta loadDatasetMeta(Long userId, String tableName, String fileType) throws SQLException {
@@ -74,6 +95,7 @@ public class DuckDbService {
     }
 
     public List<ColumnInfo> getSchema(Long userId, String tableName) throws SQLException {
+        validateTableName(tableName);
         return connectionPool.withConnection(userId, conn -> {
             List<ColumnInfo> columns = new ArrayList<>();
             try (Statement stmt = conn.createStatement();
@@ -89,7 +111,7 @@ public class DuckDbService {
     }
 
     public QueryResult executeReadOnlyQuery(Long userId, String sql) throws SQLException {
-        String trimmed = sql.trim().toUpperCase();
+        String trimmed = sql.trim().toUpperCase(Locale.ROOT);
         if (!trimmed.startsWith("SELECT") && !trimmed.startsWith("WITH") && !trimmed.startsWith("EXPLAIN")
             && !trimmed.startsWith("DESCRIBE") && !trimmed.startsWith("SHOW")) {
             throw new SQLException("只允许执行查询语句");
@@ -121,6 +143,7 @@ public class DuckDbService {
                     }
                     rows.add(row);
                 }
+                rs.close();
 
                 long executionTime = System.currentTimeMillis() - start;
                 return new QueryResult(columns, rows, rows.size(), executionTime);
@@ -129,10 +152,12 @@ public class DuckDbService {
     }
 
     public QueryResult previewData(Long userId, String tableName) throws SQLException {
+        validateTableName(tableName);
         return executeReadOnlyQuery(userId, "SELECT * FROM " + tableName + " LIMIT 100");
     }
 
     public void dropTable(Long userId, String tableName) throws SQLException {
+        validateTableName(tableName);
         connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("DROP TABLE IF EXISTS " + tableName);
@@ -154,7 +179,7 @@ public class DuckDbService {
     }
 
     public long executeCleaningSql(Long userId, String sql) throws SQLException {
-        String normalized = sql.trim().toUpperCase().replaceAll("\\s+", " ");
+        String normalized = sql.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", " ");
         boolean allowed = ALLOWED_CLEANING_KEYWORDS.stream().anyMatch(kw -> {
             if (kw.equals("CREATE TABLE AS SELECT")) {
                 return normalized.startsWith("CREATE TABLE") && normalized.contains("AS SELECT");
@@ -172,6 +197,9 @@ public class DuckDbService {
     }
 
     public void cloneTable(Long userId, String sourceTable, String targetTable) throws SQLException {
+        validateTableName(sourceTable);
+        validateTableName(targetTable);
+        validateTablePair(sourceTable, targetTable);
         connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE " + targetTable + " AS SELECT * FROM " + sourceTable);
@@ -180,6 +208,9 @@ public class DuckDbService {
     }
 
     public void renameTable(Long userId, String oldName, String newName) throws SQLException {
+        validateTableName(oldName);
+        validateTableName(newName);
+        validateTablePair(oldName, newName);
         connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("ALTER TABLE " + oldName + " RENAME TO " + newName);
@@ -188,6 +219,7 @@ public class DuckDbService {
     }
 
     public void dropTableIfExists(Long userId, String tableName) throws SQLException {
+        validateTableName(tableName);
         connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("DROP TABLE IF EXISTS " + tableName);
@@ -196,6 +228,7 @@ public class DuckDbService {
     }
 
     public boolean tableExists(Long userId, String tableName) throws SQLException {
+        validateTableName(tableName);
         return connectionPool.withConnection(userId, conn -> {
             try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery(
@@ -203,8 +236,32 @@ public class DuckDbService {
                 while (rs.next()) {
                     if (rs.getString("table_name").equalsIgnoreCase(tableName)) return true;
                 }
+                return false;
             }
-            return false;
         });
+    }
+
+    private void validateTableName(String tableName) {
+        if (!VALID_IDENTIFIER.matcher(tableName).matches()) {
+            throw new IllegalArgumentException("Invalid table name: " + tableName);
+        }
+    }
+
+    private void validateFilePath(String filePath) {
+        if (filePath == null || filePath.isBlank()) {
+            throw new IllegalArgumentException("File path must not be empty");
+        }
+        if (filePath.contains("..")) {
+            throw new IllegalArgumentException("File path contains invalid sequences");
+        }
+    }
+
+    private void validateTablePair(String first, String second) {
+        Set<String> names = new HashSet<>();
+        names.add(first.toLowerCase(Locale.ROOT));
+        names.add(second.toLowerCase(Locale.ROOT));
+        if (names.size() < 2) {
+            throw new IllegalArgumentException("Source and target tables must differ");
+        }
     }
 }

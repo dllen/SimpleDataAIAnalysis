@@ -73,6 +73,17 @@ npm run dev
    - "各类别数量分布如何？"
    - "数量最多的是什么？"
 
+## 演示截图
+
+### 登录页面
+![登录页面](docs/images/01-login.png)
+
+### 数据集列表
+![数据集列表](docs/images/02-datasets.png)
+
+### 数据分析工作区
+![数据分析工作区](docs/images/03-workspace.png)
+
 ## 项目结构
 
 ```

@@ -1,5 +1,6 @@
 package com.example.agent.security;
 
+import com.example.agent.config.AuthProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -16,15 +17,11 @@ import java.util.Map;
 @Component
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret}")
+    @Value("${app.auth.jwt-secret}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration}")
+    @Value("${app.auth.jwt-expiration}")
     private long jwtExpiration;
-
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-    }
 
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
@@ -48,6 +45,10 @@ public class JwtTokenProvider {
         try {
             Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token);
             return true;
+        } catch (io.jsonwebtoken.ExpiredJwtException ex) {
+            return false;
+        } catch (io.jsonwebtoken.JwtException ex) {
+            return false;
         } catch (Exception e) {
             return false;
         }
@@ -60,5 +61,9 @@ public class JwtTokenProvider {
                 .parseSignedClaims(token)
                 .getPayload();
         return claims.getSubject();
+    }
+
+    private SecretKey getSigningKey() {
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 }

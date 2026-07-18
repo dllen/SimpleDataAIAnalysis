@@ -18,13 +18,14 @@ public class DataQualityScanner {
     }
 
     public List<CleaningIssue> scan(Long userId, String tableName) throws SQLException {
+        validateTableName(tableName);
         List<CleaningIssue> issues = new ArrayList<>();
         List<ColumnInfo> columns = duckDbService.getSchema(userId, tableName);
-        long totalRows = getRowCount(userId, tableName);
+        long totalRows = querySingleLong(userId, "SELECT COUNT(*) FROM " + tableName);
 
         for (ColumnInfo col : columns) {
             String name = col.name();
-            long nullCount = countNull(userId, tableName, name);
+            long nullCount = countCondition(userId, tableName, name, "\"" + name + "\" IS NULL");
             if (nullCount > 0) {
                 String fixSql;
                 if (looksLikeNumeric(col.type())) {
@@ -42,7 +43,9 @@ public class DataQualityScanner {
                 ));
             }
 
-            long duplicateCount = countDuplicate(userId, tableName, name);
+            long duplicateCount = countCondition(userId, tableName, name, "\"" + name + "\" IS NOT NULL", """
+                SELECT COUNT(*) FROM (SELECT \"" + name + "\", COUNT(*) AS c FROM %s GROUP BY \"" + name + "\" HAVING c > 1)
+                """.formatted(tableName));
             if (duplicateCount > 0) {
                 issues.add(new CleaningIssue(
                     "DUPLICATE_VALUE",
@@ -55,7 +58,7 @@ public class DataQualityScanner {
             }
 
             if (looksLikeNumeric(col.type())) {
-                long invalidCount = countInvalidNumeric(userId, tableName, name);
+                long invalidCount = countCondition(userId, tableName, name, "TRY_CAST(\"" + name + "\" AS DOUBLE) IS NULL AND \"" + name + "\" IS NOT NULL");
                 if (invalidCount > 0) {
                     issues.add(new CleaningIssue(
                         "TYPE_MISMATCH",
@@ -94,15 +97,29 @@ public class DataQualityScanner {
         return value == null ? 0L : ((Number) value).longValue();
     }
 
+    private long countCondition(Long userId, String tableName, String column, String condition) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM " + tableName + " WHERE " + condition;
+        return querySingleLong(userId, sql);
+    }
+
+    private long countCondition(Long userId, String tableName, String column, String nullCondition, String groupedSql) throws SQLException {
+        long baseCount = countCondition(userId, tableName, column, nullCondition);
+        if (baseCount == 0) return 0;
+        return querySingleLong(userId, groupedSql);
+    }
+
     private boolean looksLikeNumeric(String type) {
         String t = type.toUpperCase();
         return t.contains("INT") || t.contains("DOUBLE") || t.contains("FLOAT") || t.contains("DECIMAL") || t.contains("NUMERIC");
     }
 
     private long getRowCount(Long userId, String tableName) throws SQLException {
-        var result = duckDbService.executeReadOnlyQuery(userId, "SELECT COUNT(*) FROM " + tableName);
-        if (result.rows().isEmpty()) return 0L;
-        Object value = result.rows().get(0).get(0);
-        return value == null ? 0L : ((Number) value).longValue();
+        return querySingleLong(userId, "SELECT COUNT(*) FROM " + tableName);
+    }
+
+    private void validateTableName(String tableName) {
+        if (tableName == null || tableName.isBlank() || !tableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("Invalid table name: " + tableName);
+        }
     }
 }

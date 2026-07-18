@@ -3,6 +3,7 @@ package com.example.agent.controller;
 import com.example.agent.model.dto.AnalysisRequest;
 import com.example.agent.model.dto.AnalysisResponse;
 import com.example.agent.service.AnalysisService;
+import com.example.agent.exception.BusinessException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
@@ -28,9 +29,11 @@ public class AnalysisController {
         try {
             Long userId = getCurrentUserId();
             return ResponseEntity.ok(analysisService.analyze(userId, datasetId, request.question()));
-        } catch (Exception e) {
+        } catch (BusinessException e) {
             return ResponseEntity.badRequest().body(
                 java.util.Map.of("error", true, "message", e.getMessage()));
+        } catch (Exception e) {
+            throw new BusinessException("分析失败: " + e.getMessage());
         }
     }
 
@@ -45,11 +48,13 @@ public class AnalysisController {
                             .event("message")
                             .data(data)
                             .build());
-        } catch (Exception e) {
+        } catch (BusinessException e) {
             return Flux.just(ServerSentEvent.<String>builder()
                     .event("message")
-                    .data("{\"type\":\"error\",\"data\":\"" + e.getMessage() + "\"}\n")
+                    .data("{\"type\":\"error\",\"data\":\"" + escapeJson(e.getMessage()) + "\"}\n")
                     .build());
+        } catch (Exception e) {
+            throw new BusinessException("流式分析失败: " + e.getMessage());
         }
     }
 
@@ -59,5 +64,16 @@ public class AnalysisController {
             return analysisService.findUserIdByUsername(user.getUsername());
         }
         throw new com.example.agent.exception.BusinessException("未登录");
+    }
+
+    private String escapeJson(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 }

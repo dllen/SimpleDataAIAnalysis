@@ -33,9 +33,9 @@ spring:
       max-request-size: 50MB
 
 app:
-  jwt:
-    secret: ${JWT_SECRET:change_this_in_production_with_at_least_256_bits_key_1234567890}
-    expiration: 86400000
+  auth:
+    jwt-secret: ${JWT_SECRET:change_this_in_production_with_at_least_256_bits_key_1234567890}
+    jwt-expiration: ${JWT_EXPIRATION:86400000}
   duckdb:
     storage-path: ./data/duckdb
   upload:

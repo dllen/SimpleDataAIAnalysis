@@ -8,6 +8,8 @@ import com.example.agent.model.enums.DatasetStatus;
 import com.example.agent.model.enums.FileType;
 import com.example.agent.exception.BusinessException;
 import com.example.agent.repository.DatasetRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +31,7 @@ import java.util.UUID;
 public class DatasetService {
 
     private static final Logger log = LoggerFactory.getLogger(DatasetService.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final DuckDbService duckDbService;
     private final DatasetRepository datasetRepository;
@@ -58,18 +61,20 @@ public class DatasetService {
         String finalTableName = generateTableName(userId);
         String rawTableName = "_raw_" + finalTableName;
 
+        Path userDir = Paths.get(uploadPath, "user_" + userId).normalize();
+        ensureInsideUploadRoot(userDir);
+
         try {
-            Path userDir = Paths.get(uploadPath, "user_" + userId);
             Files.createDirectories(userDir);
 
-            String storedFileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+            String storedFileName = UUID.randomUUID() + "_" + sanitizeFileName(file.getOriginalFilename());
             Path filePath = userDir.resolve(storedFileName);
             file.transferTo(filePath);
 
             DuckDbService.DatasetMeta rawMeta = switch (fileType) {
                 case CSV -> duckDbService.loadCsv(userId, filePath.toString(), rawTableName);
                 case JSON -> duckDbService.loadJson(userId, filePath.toString(), rawTableName);
-                case EXCEL -> loadExcelToDuckDb(userId, file, filePath, rawTableName);
+                case EXCEL -> loadExcelToDuckDb(userId, file, userDir, rawTableName);
             };
 
             DatasetStatus status = DatasetStatus.READY;
@@ -101,13 +106,15 @@ public class DatasetService {
         }
     }
 
-    private DuckDbService.DatasetMeta loadExcelToDuckDb(Long userId, MultipartFile file, Path filePath, String tableName) throws Exception {
-        Path csvPath = filePath.resolveSibling(tableName + ".csv");
+    private DuckDbService.DatasetMeta loadExcelToDuckDb(Long userId, MultipartFile file, Path userDir, String tableName) throws Exception {
+        Path csvPath = userDir.resolve(tableName + ".csv");
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             DataFormatter formatter = new DataFormatter();
 
-            try (BufferedWriter writer = Files.newBufferedWriter(csvPath)) {
+            Files.createDirectories(csvPath.getParent());
+            try (BufferedWriter writer = Files.newBufferedWriter(csvPath);
+                 Workbook ignored = workbook) {
                 Iterator<Row> rowIterator = sheet.iterator();
                 while (rowIterator.hasNext()) {
                     Row row = rowIterator.next();
@@ -120,6 +127,8 @@ public class DatasetService {
                     writer.newLine();
                 }
             }
+        } finally {
+            deleteQuietly(csvPath);
         }
         return duckDbService.loadCsv(userId, csvPath.toString(), tableName);
     }
@@ -197,56 +206,32 @@ public class DatasetService {
     }
 
     private String serializeColumns(List<ColumnInfo> columns) {
-        if (columns == null || columns.isEmpty()) return "[]";
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < columns.size(); i++) {
-            ColumnInfo col = columns.get(i);
-            if (i > 0) sb.append(",");
-            sb.append("{\"name\":\"").append(col.name().replace("\"", "\\\""))
-              .append("\",\"type\":\"").append(col.type())
-              .append("\",\"nullable\":").append(col.nullable()).append("}");
+        try {
+            return OBJECT_MAPPER.writeValueAsString(columns);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException("列信息序列化失败");
         }
-        sb.append("]");
-        return sb.toString();
     }
 
     private List<ColumnInfo> deserializeColumns(String json) {
-        List<ColumnInfo> columns = new ArrayList<>();
-        if (json == null || json.isBlank() || json.equals("[]")) return columns;
-        try {
-            json = json.trim();
-            if (json.startsWith("[")) json = json.substring(1);
-            if (json.endsWith("]")) json = json.substring(0, json.length() - 1);
-            if (json.isBlank()) return columns;
-
-            String[] items = json.split("(?<=\\}),(?=\\{)");
-            for (String item : items) {
-                item = item.trim();
-                if (item.isEmpty()) continue;
-                String name = extractJsonField(item, "name");
-                String type = extractJsonField(item, "type");
-                boolean nullable = !item.contains("\"nullable\":false");
-                columns.add(new ColumnInfo(name, type, nullable));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to deserialize column info: {}", json, e);
+        if (json == null || json.isBlank()) {
+            return List.of();
         }
-        return columns;
-    }
-
-    private String extractJsonField(String json, String field) {
-        String search = "\"" + field + "\":";
-        int start = json.indexOf(search);
-        if (start < 0) return "";
-        start += search.length();
-        if (json.charAt(start) == '"') {
-            start++;
-            int end = json.indexOf('"', start);
-            return json.substring(start, end);
-        } else {
-            int end = json.indexOf(',', start);
-            if (end < 0) end = json.indexOf('}', start);
-            return json.substring(start, end).trim();
+        try {
+            ColumnInfo[] array = OBJECT_MAPPER.readValue(json, ColumnInfo[].class);
+            if (array == null) {
+                return List.of();
+            }
+            List<ColumnInfo> columns = new ArrayList<>();
+            for (ColumnInfo column : array) {
+                if (column != null) {
+                    columns.add(column);
+                }
+            }
+            return columns;
+        } catch (IOException e) {
+            log.warn("Failed to deserialize column info: {}", json, e);
+            return List.of();
         }
     }
 
@@ -261,5 +246,30 @@ public class DatasetService {
             dataset.getCreatedAt(),
             dataset.getStatus()
         );
+    }
+
+    private static void ensureInsideUploadRoot(Path path) {
+        Path uploadRoot = Paths.get(".").toAbsolutePath().normalize();
+        if (!path.startsWith(uploadRoot)) {
+            throw new BusinessException("无效的上传路径");
+        }
+    }
+
+    private static String sanitizeFileName(String fileName) {
+        if (fileName == null) {
+            return "file";
+        }
+        return fileName.replaceAll("[^A-Za-z0-9._-]", "_");
+    }
+
+    private static void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.debug("Failed to delete temp file {}", path, e);
+        }
     }
 }
