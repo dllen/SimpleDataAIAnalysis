@@ -249,8 +249,9 @@ public class DatasetService {
     }
 
     private static void ensureInsideUploadRoot(Path path) {
-        Path uploadRoot = Paths.get(".").toAbsolutePath().normalize();
-        if (!path.startsWith(uploadRoot)) {
+        Path absolutePath = path.toAbsolutePath().normalize();
+        Path cwd = Paths.get("").toAbsolutePath().normalize();
+        if (!absolutePath.startsWith(cwd)) {
             throw new BusinessException("无效的上传路径");
         }
     }

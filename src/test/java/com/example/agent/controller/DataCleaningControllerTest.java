@@ -25,7 +25,11 @@ public class DataCleaningControllerTest {
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate.update("MERGE INTO users (id, username, password) KEY(id) VALUES (1, 'admin', 'password')");
+        jdbcTemplate.update("DELETE FROM cleaning_history");
+        jdbcTemplate.update("DELETE FROM datasets");
+        jdbcTemplate.update("DELETE FROM analysis_conversation");
+        jdbcTemplate.update("DELETE FROM users");
+        jdbcTemplate.update("INSERT INTO users (id, username, password) VALUES (1, 'admin', 'password')");
     }
 
     @Test

@@ -43,9 +43,9 @@ public class DataQualityScanner {
                 ));
             }
 
-            long duplicateCount = countCondition(userId, tableName, name, "\"" + name + "\" IS NOT NULL", """
-                SELECT COUNT(*) FROM (SELECT \"" + name + "\", COUNT(*) AS c FROM %s GROUP BY \"" + name + "\" HAVING c > 1)
-                """.formatted(tableName));
+            long duplicateCount = countCondition(userId, tableName, name,
+                "\"" + name + "\" IS NOT NULL",
+                "SELECT COUNT(*) FROM (SELECT \"" + name + "\", COUNT(*) AS c FROM " + tableName + " GROUP BY \"" + name + "\" HAVING c > 1)");
             if (duplicateCount > 0) {
                 issues.add(new CleaningIssue(
                     "DUPLICATE_VALUE",

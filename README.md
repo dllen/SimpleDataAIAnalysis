@@ -163,6 +163,10 @@ export AI_MODEL=moonshot-v1-8k
 ### 模型
 - `GET /api/models` - 可用模型列表
 
+## 部署
+
+👉 [国内云厂商部署指南](docs/deploy-cn-cloud.md) — 阿里云/腾讯云/华为云 一键部署
+
 ## License
 
 MIT

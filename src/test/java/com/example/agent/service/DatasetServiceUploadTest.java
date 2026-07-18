@@ -2,9 +2,11 @@ package com.example.agent.service;
 
 import com.example.agent.model.dto.DatasetResponse;
 import com.example.agent.model.enums.DatasetStatus;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,6 +16,18 @@ public class DatasetServiceUploadTest {
 
     @Autowired
     private DatasetService datasetService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void setUp() {
+        jdbcTemplate.update("DELETE FROM cleaning_history");
+        jdbcTemplate.update("DELETE FROM datasets");
+        jdbcTemplate.update("DELETE FROM analysis_conversation");
+        jdbcTemplate.update("DELETE FROM users");
+        jdbcTemplate.update("INSERT INTO users (id, username, password) VALUES (1, 'testuser', 'password')");
+    }
 
     @Test
     void shouldMarkPendingCleanForDirtyData() {

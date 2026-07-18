@@ -188,7 +188,7 @@ const AnalysisWorkspace: React.FC = () => {
     >
       <Layout style={{ height: '100%' }}>
         <Sider width={272} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
-          <DatasetList onSelect={handleSelectDataset} selectedId={selectedDatasetId} />
+          <DatasetList onSelect={handleSelectDataset} selectedId={selectedDatasetId ?? undefined} />
         </Sider>
         <Content style={{ background: '#f5f7fa', padding: 16 }}>
           {selectedDataset ? (
